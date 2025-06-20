@@ -36,6 +36,11 @@ prometheus      prom/prometheus:latest       "/bin/prometheus --c…"   promethe
 
 [Follow this blog](https://betterstack.com/community/guides/monitoring/visualize-prometheus-metrics-grafana/#configuring-the-prometheus-data-source) to for a step-by-step guide on building the dashboard.
 
+
+## Architecture Diagram
+
+![Prometheus Grafana Architecture](./Screenshots/Prometheus-Grafana-architecture.png)
+
 ## Questions and Answers
 
 ### Question 1: Container Orchestration Analysis
@@ -72,17 +77,53 @@ how would you modify the setup for a production environment?
 
 The port (9090, 9100, 3000) exposure, exposes Full metrics database access, no authentication.
 
-The current network can be improved by configuring a reverse proxy between the Container server and the public internet
+#### Modification for production
+
+- Only expose Grafana externally:
+ports:
+  - "443:3000"  # HTTPS only
+ - remove external exposure for Prometheus/Node Exporter
+ - add nginx reverse proxy with authentication
+-  implement proper TLS certificates
+
+    - The current network can be improved by configuring a reverse proxy between the Grafana container and the public internet
 
 
-## Question 3: Data Persistence Strategy
+### Question 3: Data Persistence Strategy
+
 Compare the volume mounting strategies used for Prometheus data versus Grafana data in the
 Docker Compose file. Explain why different approaches might be needed for different
 components and what would happen to your dashboards and historical metrics if you removed
 these volume configurations.
 
-Section 2: Metrics and Query Understanding
-## Question 4: PromQL Logic Breakdown
+### Answer
+
+When it comes to managing data persistence for Prometheus and Grafana, we use different approaches due to the nature of the data each application handles.
+
+### Prometheus
+
+- **Storage Mechanism:** Named volumes or bind mounts for the `/prometheus` directory.
+- **Data Type:** Prometheus generates time-series data that tends to grow predictably. This data is essential but can often be recreated by scraping targets, making it somewhat interchangeable.
+- **Reliability Needs:** Despite its replaceability, having a reliable storage solution is crucial to ensure that historical metrics are preserved without data loss. Losing this could mean losing key insights for analysis and decision-making.
+
+### Grafana
+
+- **Storage Mechanism:** Named volumes for `/var/lib/grafana`.
+- **Data Type:** Grafana stores configurations such as dashboards, user accounts, and permissions. While this data is generally smaller in size, it is critical and represents a significant investment of time and effort to configure.
+- **Importance of Data:** The dashboards and user setups in Grafana are not easily replaceable. If you lose this data, all the work that went into creating and fine-tuning those visualizations and user settings is gone.
+
+### Consequences of Not Using Volume Configurations
+
+If we didn't implement volume configurations for these applications, several issues would arise:
+
+- **Dashboards Would Disappear:** All your carefully crafted dashboards would be lost upon container restarts. This would mean rebuilding from scratch and could significantly impact productivity.
+- **Loss of Historical Metrics:** Losing all your historical metrics would not only disrupt operations but would require explaining to your team why those critical insights are no longer available.
+- **User Accounts and Permissions Resets:** All user accounts and their permissions would reset, causing confusion and frustration among users who rely on customized access and settings.
+- **Starting From Scratch:** Ultimately, without persistent storage, you’d have to recreate your entire setup from square one each time the container restarts, which is inefficient and wasteful.
+
+## Section 2: Metrics and Query Understanding
+
+### Question 4: PromQL Logic Breakdown
 The tutorial uses this query for calculating uptime:
 node_time_seconds - node_boot_time_seconds
 Explain step-by-step what each metric represents, why subtraction gives us uptime, and what
